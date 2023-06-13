@@ -1,0 +1,42 @@
+---
+title: "image_stitcher"
+author: "Jacob Weverka"
+date: "2/8/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(here)
+```
+
+
+```{r}
+
+
+library(magick)
+
+stitch_images <- function(images_folder) {
+  images <- lapply(list.files(images_folder, pattern = "*.tif", full.names = TRUE), image_read)
+  result <- image_append(image_scale(c(images, "100")), stack = TRUE)
+  return(result)
+}
+
+if (interactive()) {
+  panorama <- stitch_images(here("test_photos", "test1", "out", "crop", "a"))
+  image_write(panorama, "panorama.tiff")
+}
+
+```
+
+```{r}
+
+images_folder = here("data", "mr_photos", "out", "sorted", "1_A_3")
+
+images <- lapply(list.files(images_folder, pattern = "*.tif", full.names = TRUE), image_read)
+
+result <- image_append(c(images[[1]], images[[2]]), stack = TRUE)
+
+result
+```
+

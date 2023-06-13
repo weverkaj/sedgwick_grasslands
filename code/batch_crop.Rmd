@@ -1,0 +1,204 @@
+---
+title: "image_crop"
+author: "Jacob Weverka"
+date: "1/31/2023"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(jpeg)
+library(here)
+library(tidyverse)
+library(tiff)
+library(magick)
+library(terra)
+library(sp)
+library(raster)
+library(mosaic)
+```
+
+# batch crop
+```{r}
+
+batch_crop = function(filepath, y1 = 650, y2 = 1280, x1 = 250, x2 = 680){
+  
+require(tiff)
+
+folder <- filepath # change this to the path to your folder
+
+
+
+files <- list.files(folder, pattern = ".tif", full.names = TRUE)
+
+
+  crop_folder <- file.path(folder, "crop")
+  
+  if (!dir.exists(crop_folder)) {
+    dir.create(crop_folder)
+  }
+  
+    for (file in files) {
+      img <- readTIFF(file)
+      cropped_img <- img[x1:x2, y1:y2, ] # change the crop dimensions as desired
+      cropped_file <- sub(".tif$", "_crop.tif", file)
+      cropped_file <- file.path(crop_folder, basename(cropped_file))
+      writeTIFF(cropped_img, cropped_file)
+  
+    }
+
+}
+
+batch_crop(here("data", "mr_photos", "2023-03-17", "sorted", "5_C_1"))
+
+
+```
+
+```{r}
+p = image_read(here("data", "mr_photos", "2023-03-17", "sorted", "5_C_1", "crop", "PHO-00025_crop.tif" ))
+
+p
+
+
+```
+
+
+```{r}
+library(sp)
+library(raster)
+
+# crop_polygon = read.csv("crop_polygon.csv") %>% 
+#   dplyr::select(X, Y)
+# 
+# c = read.csv("checkerpoints_outer.csv") %>% Polygon()
+# c1 = Polygons(list(c), "c1")
+# c2 = SpatialPolygons(list(c1))
+# 
+# 
+# p = raster(here("test_photos", "test1", "out", "PHO-00004.tif"))
+# 
+# q = mask(p, c2)
+# 
+# 
+# plot(p)
+# plot(q)
+#   
+```
+
+```{r}
+
+
+library(rgdal)
+# 
+# c = read.csv("checkerpoints_outer.csv") %>% Polygon()
+# c1 = Polygons(list(c), "c1")
+# c2 = SpatialPolygons(list(c1))
+
+warped_photos = tibble(files = list.files(here("data", "mr_photos", "2023-03-17", "sorted", "5_C_1", "crop"), 
+                                          pattern  = ".tif", full.names = TRUE),
+                       position.y = seq(0, (2*(length(files) -1 )), by = 2) * -215,
+                       position.x = seq(0, length(files) - 1, by = 1) * -2) %>% 
+  mutate(rasters = map(files, ~ stack(.x))) %>% 
+  mutate(shifted = pmap(list(rasters, position.y, position.x), ~ raster::shift(..1, dx = ..3, dy = ..2)))
+```
+
+```{r}
+
+
+x = (warped_photos$shifted[[5]])
+y = (warped_photos$shifted[[6]])
+z = (warped_photos$shifted[[7]])
+
+a  = merge(z, y, x, tolerance = 500)
+
+plotRGB(merge(z, y, x, tolerance = 500))
+plotRGB(y)
+plotRGB(z)
+
+
+```
+
+
+```{r}
+m = warped_photos$shifted
+
+
+names(m)[1:2] <- c('x', 'y')
+m$tolerance = 500
+m$fun = max
+m$na.rm = TRUE
+
+
+
+
+
+mos <- do.call(what = merge, args = m)
+
+# writeRaster(mos, "test_stitch.tif", format = "GTiff", overwrite = TRUE)
+
+plotRGB(mos)
+
+
+# pct <- rgdal::SGDF2PCT(as(mos, "SpatialGridDataFrame"))
+
+# r <- setValues(raster(mos), pct$idx-1)
+# colortable(mos) <- pct$ct
+# plot(mos)
+# writeJPEG(mos, here("data", "mr_photos", "2023-03-17", "sorted", "1_A_3", "1_A_3_stitch.jpeg"))
+
+
+mos_rgb = rast(mos)
+plotRGB(mos_rgb)
+
+
+terra::writeRaster(x = mos_rgb, filename = here("data", "mr_photos", "2023-03-17", "sorted", "5_C_1_stitch.jpg"), overwrite = T, filetype = "JPEG")
+
+# d = readTIFF("test_stitch.tif")
+
+```
+
+
+
+
+```{r}
+photo_stitch = function(dir){
+  
+  batch_crop(dir)
+  
+  warped_photos = tibble(files = list.files(paste(dir, "crop", sep = "/")),
+                       position.y = seq(0, (2*(length(files) -1 )), by = 2) * -215,
+                       position.x = seq(0, length(files) - 1, by = 1) * -2) %>%
+  mutate(rasters = map(files, ~ stack(paste(dir, "crop", .x,  sep = "/")))) %>%
+  mutate(shifted = pmap(list(rasters, position.y, position.x), ~ raster::shift(..1, dx = ..3, dy = ..2)))
+  
+  m = warped_photos$shifted
+
+
+  names(m)[1:2] <- c('x', 'y')
+  m$tolerance = 50
+  m$fun = max
+  m$na.rm = TRUE
+  mos <- do.call(what = merge, args = m)
+  mos_rgb = rast(mos)
+  
+  return(mos_rgb)
+
+}
+```
+
+```{r}
+# temp = photo_stitch(here("data", "mr_photos", "2023-03-17", "sorted", "1_A_1"))
+
+all_stitch = tibble(dirs = list.dirs(here("data", "mr_photos", "2023-03-17", "sorted"), recursive = F)) %>%
+  mutate(stitched_photo = map(dirs, photo_stitch))
+
+```
+
+
+```{r}
+map2(all_stitch$dirs, all_stitch$stitched_photo, ~ terra::writeRaster(x = .y, filename = paste(.x, "_stitch.jpg", sep = ""), overwrite = T, filetype = "JPEG"))
+
+
+# terra::writeRaster(x = mos_rgb, filename = here("data", "mr_photos", "2023-03-17", "sorted", "5_C_1_stitch.jpg"), overwrite = T, filetype = "JPEG")
+```
+

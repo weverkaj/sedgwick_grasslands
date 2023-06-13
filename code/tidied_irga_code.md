@@ -1,0 +1,495 @@
+---
+title: "IRGA data for NCOS"
+author: "Jacob Weverka"
+date: "7/22/2020"
+output: html_document
+---
+
+
+
+Loading necessary libraries
+
+
+```r
+library(tidyverse)
+library(magrittr)
+library(R.utils)
+library(broom)
+library(here)
+library(janitor)
+# library(BAS)
+```
+
+
+ <font size="4">  General setup 4</font>
+
+
+Read in licor data with timestamp and date
+
+
+```r
+# raw data folder
+licor_raw = here::here("data/2023/SIR/licor_raw/")
+
+files = list.files(licor_raw)
+files = files[files != "desktop.ini"]
+
+raw_data = tibble(filename = files) %>%
+  mutate(contents = map(filename, ~ read_table2(file.path(licor_raw, .x), skip = 1) %>%
+                          rename(time = `Time(H:M:S)`))) %>%
+  mutate(timestamp_date = map(filename, ~ (str_remove(strsplit(readLines(con = file.path(licor_raw, .x), n = 1), split = " ")[[1]][1], '"'))) %>%
+           lubridate::ymd(),
+         timestamp_time = map(filename, ~ read_table2(file.path(licor_raw, .x), skip = 1)[1,1])) %>%
+  unnest(timestamp_time)
+```
+Read in sequence data from lab
+
+
+```r
+# excel files (CSV) with sample info folder
+sequence_files = here::here("data/2023/SIR/sample_sequences/")
+
+
+seqs = list.files(sequence_files)
+seqs = seqs[seqs != "desktop.ini"]
+
+date_fun = function(df){df$date[1]}
+
+time_fun = function(df){df$time[1]}
+
+
+all_seqs = tibble(filename = seqs) %>%
+  mutate(sequences = map(filename, ~ read_csv(file.path(sequence_files, .x)) %>%
+                          # filter(height > baseline) %>%
+                          mutate(peak_number = seq.int(nrow(.))))) %>%
+  mutate(timestamp_date = lubridate::mdy(map(sequences, date_fun)),
+         timestamp_time = map(sequences, time_fun))
+```
+
+
+Add time elapsed within nested data
+Filter out non-peak data
+Assign peaks
+
+
+```r
+baseline = 5
+
+run_data = raw_data %>%
+  mutate(contents = map(contents,
+                       ~ mutate(.x,
+                                time_elapsed = seq.int(nrow(.)),
+                                is_peak = `CO2(ppm)` > baseline)
+                       )
+         ) %>%
+  unnest(contents) %>%
+  filter(is_peak) %>%
+  nest(-filename, -timestamp_date, -`Time(H:M:S)`) %>%
+    mutate(data = 
+           map(data, ~
+             .x %>% mutate(peak_number = cumsum((time_elapsed - lag(time_elapsed)) > 1 & !is.na(lag(time_elapsed))) + 1
+                      ) %>% 
+               group_by(peak_number) %>% 
+               filter(n() > 3) %>% 
+               ungroup(peak_number)
+           )
+  )
+```
+
+```
+## Warning: Supplying `...` without names was deprecated in tidyr 1.0.0.
+## ℹ Please specify a name for each selection.
+## ℹ Did you want `data = c(-filename, -timestamp_date, -`Time(H:M:S)`)`?
+## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.
+```
+
+Calculate area under the curve
+
+
+
+```r
+calc_area = function(df){ as.double(sum(df$rectangle, na.rm = TRUE) + sum(df$triangle, na.rm = TRUE))}
+
+intp = run_data %>%
+  mutate(data = map(data, ~ .x %>%
+                      nest(-peak_number) %>%
+                      mutate(data = map(data, ~ .x %>%
+                                          add_row %>%
+                                          mutate(
+                                            rectangle = `CO2(ppm)`,
+                                            triangle = abs(diff(c(baseline[1], `CO2(ppm)`[!is.na(`CO2(ppm)`)], baseline[1]))) * 0.5
+                                            )
+                                        )
+                             ) %>%
+                      mutate(area = map(data, calc_area) %>% flatten_dbl()) %>%
+                      filter(area > 15) %>%
+                      mutate(peak_number = seq.int(nrow(.)))
+                    ),
+         timestamp_date = lubridate::ymd(timestamp_date)
+         )
+```
+Join sequence data to licor data
+
+
+```r
+# all_data =
+  # inner_join(all_seqs, intp, by = "timestamp_date")
+```
+
+
+
+
+Joining data - be aware if you have multiple files for the same date it will produce all possible combos for that row
+
+
+```r
+all_data = as_tibble(intp) %>%
+  inner_join(as_tibble(all_seqs), by = "timestamp_date") %>%
+  mutate(labeled_data = map2(.x = data, .y = sequences, ~ left_join(.x, .y, by = "peak_number") %>% 
+                               filter(is.na(cancel))),
+         standards = map(labeled_data, ~ .x %>% drop_na(std)),
+         samples = map(labeled_data, ~ .x %>% filter(is.na(std))))
+```
+
+
+Make standard curve
+
+
+```r
+add_sc = all_data %>% 
+  mutate(fit = map(standards, ~ lm(std_conc ~ 0 + area, data = .)),
+         results = map(fit, tidy),
+         pval = map2(fit, results, ~ glance(.x) %>%
+                      select(r.squared) %>%
+                      bind_cols(.y$p.value)))
+```
+
+
+Calculate ppm values with confidence intervals for samples
+
+
+```r
+finished = add_sc %>%
+  mutate(samples = map2(fit, samples,
+                       ~ .y %>% bind_cols(as.data.frame(predict(.x, .y, interval = "confidence"))))
+  ) %>%
+  arrange(timestamp_date)
+```
+
+
+
+```r
+weights = read_csv(here("data/2023/SIR/sir_mass.csv"),
+                   col_types = cols(plot = col_character())) %>%
+  mutate(treatment = toupper(treatment),
+         sample_ID = paste(plot, treatment, depth, sep = "-"))
+```
+
+
+```r
+data = finished %>%
+  select(samples) %>%
+  unnest(samples) %>%
+  filter(!is.na(treatment)) %>% 
+  select(-std, -std_conc, -data, -peak_number, -sample_ID) %>%
+  mutate(percent_400 = replace_na(percent_400, 0),
+         percent_sample = replace_na(percent_sample, 1),
+         concentration = (fit - (percent_400*400))/percent_sample) %>%
+  mutate(mol = (0.946353/0.082057/293.15 ) * concentration/1000000) %>%
+  left_join(weights, by = c("plot", "treatment", "depth")) %>%
+  group_by(sample_ID) %>%
+  mutate(co2change = c(0,diff(concentration)),
+         co2_cum = cumsum(co2change),
+         change_adjusted = co2_cum/mass,
+         time_adj = (time - min(time))/3600)
+```
+
+
+
+```r
+# dry_mass = tibble(sample_ID = as.character(c(1,5,7,10,12)), aboveground = c(0.3412, .2948, 0.1648, .2108, .2849), root = c(.1909, .1270, .0813, .0910, .1963))
+```
+
+
+```r
+ggplot(data, aes(x = time_adj, y = fit, color = sample_ID)) +
+  geom_line(aes(linetype = treatment)) +
+  facet_grid(. ~ depth)
+```
+
+```
+## Don't know how to automatically pick scale for object of type <difftime>. Defaulting to continuous.
+```
+
+![plot of chunk unnamed-chunk-14](figure/unnamed-chunk-14-1.png)
+
+
+
+```r
+sum_data = data %>%
+  group_by(sample_ID, plot, treatment, depth) %>%
+  summarise(time_end = max(time),
+            time_start = min(time),
+            co2 = max(change_adjusted)) %>%
+  mutate(time_elapsed = as.numeric((time_end - time_start)/3600),
+         av_rate = co2/time_elapsed) %>%
+  mutate(treatment = as.factor(case_when(sample_ID == 5 | sample_ID == 7 ~ 1,
+                               sample_ID != 5 | sample_ID != 7 ~ 0))) %>%
+  left_join(dry_mass, by = "sample_ID") %>% 
+  filter(!is.na(sample_ID))
+```
+
+```
+## `summarise()` has grouped output by 'sample_ID', 'plot', 'treatment'. You can override using the `.groups` argument.
+```
+
+
+```r
+ggplot(sum_data, aes(x = as.factor(depth), y = av_rate, color = treatment)) +
+  geom_boxplot()
+```
+
+![plot of chunk unnamed-chunk-16](figure/unnamed-chunk-16-1.png)
+
+```r
+# +
+#   geom_smooth(aes(x = root, y = av_rate, color = NULL), method = "lm", color = "black", linetype = "dashed", se = F) +
+#   theme_bw() +
+#   xlab("Root Biomass (g)") +
+#   ylab("Microbial Biomass SIR (mol C per hour)") +
+#   scale_color_manual(name = "Treatment", values = c("darkgreen", "purple"), labels = c("Ungrazed", "Grazed")) +
+#   theme(axis.text=element_text(size=12))
+```
+
+
+```r
+ggplot(sum_data, aes(x = treatment, y = av_rate)) +
+  geom_boxplot() +
+  geom_point()
+```
+
+![plot of chunk unnamed-chunk-17](figure/unnamed-chunk-17-1.png)
+
+```r
+ggplot(sum_data, aes(x = treatment, y = root)) +
+  geom_point()
+```
+
+```
+## Warning: Removed 34 rows containing missing values (`geom_point()`).
+```
+
+![plot of chunk unnamed-chunk-17](figure/unnamed-chunk-17-2.png)
+
+```r
+t = lm(data = sum_data, av_rate ~ root)
+```
+
+```
+## Error in lm.fit(x, y, offset = offset, singular.ok = singular.ok, ...): 0 (non-NA) cases
+```
+
+```r
+summary(t)
+```
+
+```
+## Error in object[[i]]: object of type 'closure' is not subsettable
+```
+
+
+
+```r
+ggplot(data, aes(x = time, y = change_adjusted, color = sample_ID)) +
+  geom_point() +
+  geom_line()
+```
+
+![plot of chunk unnamed-chunk-18](figure/unnamed-chunk-18-1.png)
+
+```r
+ggplot(data, aes(x = time, y = change_adjusted, color = sample_ID)) +
+  geom_col()
+```
+
+![plot of chunk unnamed-chunk-18](figure/unnamed-chunk-18-2.png)
+
+
+
+
+```r
+samples = by_sample %>%
+  select(sample_ID,  data, starts_data, ends_data) %>%
+  #check on number of starts and ends
+  mutate(nstarts = map(starts_data, nrow),
+         nends = map(ends_data, nrow),
+         #put starts and ends back together and arrange in order of time, assign interval number
+         all = map2(starts_data, ends_data, ~ bind_rows(.x, .y) %>%
+                      ungroup() %>%
+                      mutate(date = lubridate::mdy(date)) %>%
+                      arrange(datetime, start_end) %>%
+                      mutate(interval = cumsum(start))),
+         #only choose intervals with a start an an end, find change in co2 in each interval, calculate cumulative co2 emitted since start of incubation
+         intervals = map(all, ~ .x %>%
+                           mutate(total_time = hms::as.hms(.x$datetime - .x$datetime[1])) %>%
+                           group_by(interval) %>%
+                           filter(n() > 1) %>%
+                           mutate(co2change = c(0, diff(mol)),
+                                  timechange = (datetime - datetime[1])/86400) %>%
+                           ungroup() %>%
+                           mutate(total_co2 = cumsum(co2change)) %>%
+                           filter(ifelse(interval == 1, start <2, start_end == "end"))
+                         ))
+```
+
+```
+## Error in select(., sample_ID, data, starts_data, ends_data): object 'by_sample' not found
+```
+
+
+```r
+#read in soil weights, day of removal data
+
+tubes_removal = read_csv(here("data/incubation/dpw_extraction_weights.csv"),
+              col_types = cols(plot = col_factor(),
+                               treatment = col_factor(),
+                               depth = col_factor(),
+                               sample_date = col_date(format = "%m/%d/%Y"),
+                               lab_date = col_date(format = "%m/%d/%Y")))
+```
+
+```
+## Error: 'G:/My Drive/UCSB/Research/grazing_sedgewick/data/incubation/dpw_extraction_weights.csv' does not exist.
+```
+
+```r
+soil_weights = read_csv(here("data/incubation/add_water.csv"),
+              col_types = cols(plot = col_factor(),
+                               treatment = col_factor(),
+                               depth = col_factor(),
+                               sample_date = col_date(format = "%m/%d/%Y"),
+                               lab_date = col_date(format = "%m/%d/%Y")))
+```
+
+```
+## Error: 'G:/My Drive/UCSB/Research/grazing_sedgewick/data/incubation/add_water.csv' does not exist.
+```
+
+```r
+fm = read_csv(here("data/moisture_whc/csv/moisture.csv"),
+              col_types = cols(date = col_date(format = "%m/%d/%Y")))
+```
+
+```
+## Error: 'G:/My Drive/UCSB/Research/grazing_sedgewick/data/moisture_whc/csv/moisture.csv' does not exist.
+```
+
+
+
+
+```r
+fm = fm %>%
+  mutate(wet_soil = tray_wet_soil - tray_weight,
+         dry_soil = tray_dry_soil - tray_weight,
+         moisture = wet_soil - dry_soil,
+         field_moisture = moisture/dry_soil)
+```
+
+```
+## Error in mutate(., wet_soil = tray_wet_soil - tray_weight, dry_soil = tray_dry_soil - : object 'fm' not found
+```
+
+```r
+inc_water = soil_weights %>%
+  left_join(fm, by = c("sample")) %>%
+  select(sample, soil_weight, tube_ID, moisture) %>%
+  mutate(water_start = moisture * soil_weight,
+         soil_start = soil_weight - water_start)
+```
+
+```
+## Error in left_join(., fm, by = c("sample")): object 'soil_weights' not found
+```
+
+
+
+```r
+tubes = tubes_removal %>%
+  right_join(inc_water, by = c("plot" = "sample", "tube_ID")) %>%
+  rename(sample = plot) %>%
+  select(sample_date, sample, tube_ID, soil_weight, soil_start)%>%
+  filter(tube_ID != "X")%>%
+  group_by(sample) %>%
+  arrange(sample_date) %>%
+  nest() %>%
+  rename(tubes = data) %>%
+  mutate(tubes = map(tubes, ~ .x %>%
+                       mutate(total_mass = c(sum(soil_weight) - cumsum(soil_weight) + soil_weight))))
+```
+
+```
+## Error in right_join(., inc_water, by = c(plot = "sample", "tube_ID")): object 'tubes_removal' not found
+```
+
+
+```r
+air_and_soil = samples %>%
+  select(sample_ID, intervals) %>%
+  left_join(tubes, by = c("sample_ID" = "sample")) %>%
+  mutate(as = map2(intervals, tubes, ~ left_join(.x, .y, by= c("date" = "sample_date")) %>%
+                     fill(total_mass) %>%
+                     fill(total_mass, .direction =  "up") %>%
+                     mutate(time_elapsed = as.numeric(total_time)/86400,
+                            total_time = as.numeric(total_time)/86400,
+                            # time_bin = cut(total_time, breaks = c(-0.01, 0.1, 1.1, 2.2, 5.5, 7.5, 10.5, 17.5, 28.5), labels = c(0, 1, 2, 5, 7, 10, 17, 28)),
+                            co2persoil = mol/total_mass,
+                            co2cum = cumsum(co2persoil),
+                            co2rate = co2persoil/as.numeric(timechange),
+                            logco2rate = log(co2rate))
+  )
+  ) %>%
+  select(sample_ID, as)
+```
+
+```
+## Error in select(., sample_ID, intervals): object 'samples' not found
+```
+
+
+```r
+forplot = air_and_soil %>% unnest(as)
+```
+
+```
+## Error in unnest(., as): object 'air_and_soil' not found
+```
+
+
+```r
+(co2cum = ggplot(forplot, aes(x = as.numeric(time_elapsed), y = co2cum, color = sample_ID)) +
+  geom_line(size = 1) +
+  geom_point() +
+  scale_x_continuous(breaks = c(0,1,2,6,12, 19, 27, 41)) +
+  ylim(0, 0.002) +
+  xlab("Time (Days)") +
+  ylab(expression("cumulative mol CO"[2]*" g"^"-1"*" dry soil")) )
+```
+
+```
+## Error in ggplot(forplot, aes(x = as.numeric(time_elapsed), y = co2cum, : object 'forplot' not found
+```
+
+```r
+(co2rate = ggplot(forplot %>% filter(!is.infinite(co2rate)), aes(x = as.numeric(time_elapsed), y = co2rate, color = sample_ID)) +
+  geom_line(size = 1) +
+  geom_point() +
+   scale_x_continuous(breaks = c(0,1,2,6,12, 19, 27, 41)) +
+  theme(axis.text.x = element_text(vjust = 0.5)) +
+  # ggtitle("Cumulative CO2 per gram soil") +
+  xlab("Time (Days)") +
+  ylab(expression("mol CO"[2]*"day"^"-1"*" g"^"-1"*" dry soil")))
+```
+
+```
+## Error in filter(., !is.infinite(co2rate)): object 'forplot' not found
+```
