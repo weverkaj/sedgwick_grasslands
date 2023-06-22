@@ -12,7 +12,7 @@ library(janitor)
 ```
 
 ```{r}
-leaf_scans = read_csv(here("data","2023","sedgwick_leaf_scans_20230421", "leaf_area_scan_summary_20230615.csv"))
+leaf_scans = read_csv(here("data","2023","sedgwick_leaf_scans_20230421", "Summary1.csv"))
 ```
 ```{r}
 leaf_dry_mass= read_csv(here("data", "2023", "traits", "leaf_dry_mass.csv"))
@@ -38,5 +38,8 @@ leaf_scan_and_dry_mass = leaf_scans_formatted %>%
 ```{r}
 ggplot(leaf_scan_and_dry_mass, aes(x = species, y= sla))+
   geom_boxplot()
+ggplot(leaf_scan_and_dry_mass, aes(x=species, y=sla, fill=species)) + 
+    geom_boxplot(alpha=0.3) +
+    theme(legend.position="none")
 ```
 
