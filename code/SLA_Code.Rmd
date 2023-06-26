@@ -9,6 +9,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(here)
 library(janitor)
+library(ggplot2)
 ```
 
 ```{r}
@@ -41,5 +42,32 @@ ggplot(leaf_scan_and_dry_mass, aes(x = species, y= sla))+
 ggplot(leaf_scan_and_dry_mass, aes(x=species, y=sla, fill=species)) + 
     geom_boxplot(alpha=0.3) +
     theme(legend.position="none")
+<<<<<<< HEAD
+=======
+```
+```{r}
+leaf_CN = read_csv(here("data","2023","traits", "leaf_CN_20230620.csv"))
+```
+
+```{r}
+leaf_CN_formatted = leaf_CN %>%
+  clean_names()%>%
+   rename(sample_ID = bypass, mass= x7) %>%
+   rename(leaf_nitrogen= x0_000_12, leaf_carbon = x0_000_13)%>%
+   separate(sample_ID, into = c("plot", "species"), sep="-")%>%
+  drop_na(species)%>%
+  select("plot","species", "mass", "leaf_nitrogen", "leaf_carbon")
+
+```
+
+```{r}
+leaf_CN_formatted <- leaf_CN_formatted %>%
+  mutate(CNratio=leaf_carbon/leaf_nitrogen, 2)
+  
+```
+
+```{r}
+ggplot(leaf_CN_formatted, aes(x=species, y=CNratio)) +  geom_point()
+>>>>>>> ec64eaae43f5fe3c3412b4f01ba971783b0fa870
 ```
 
