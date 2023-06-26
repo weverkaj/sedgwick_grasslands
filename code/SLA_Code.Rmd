@@ -42,9 +42,10 @@ ggplot(leaf_scan_and_dry_mass, aes(x = species, y= sla))+
 ggplot(leaf_scan_and_dry_mass, aes(x=species, y=sla, fill=species)) + 
     geom_boxplot(alpha=0.3) +
     theme(legend.position="none")
-<<<<<<< HEAD
-=======
+
 ```
+
+
 ```{r}
 leaf_CN = read_csv(here("data","2023","traits", "leaf_CN_20230620.csv"))
 ```
@@ -68,6 +69,6 @@ leaf_CN_formatted <- leaf_CN_formatted %>%
 
 ```{r}
 ggplot(leaf_CN_formatted, aes(x=species, y=CNratio)) +  geom_point()
->>>>>>> ec64eaae43f5fe3c3412b4f01ba971783b0fa870
+
 ```
 
