@@ -1,0 +1,177 @@
+---
+title: "exoenzymes"
+author: "Jacob Weverka"
+date: "2023-07-17"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+```
+
+```{r}
+key = read_csv(here("data/2023/exoenzymes/key.csv"),
+               col_types = cols(plate_number = col_character())) %>% 
+  nest(key = c(-plate_number, - enzyme))
+
+
+
+files_raw = tibble(files = list.files(here("data/2023/exoenzymes/exoenzymes_csv"))) %>% 
+  mutate(data = map(files, ~ read_csv(here("data/2023/exoenzymes/exoenzymes_csv", .x), col_types = cols())))
+
+```
+
+```{r}
+files = files_raw %>% 
+  mutate(enzyme = map_chr(files, ~ str_split(.x, '[0-9]+', 2)[[1]][1]),
+         ID = map(files, ~ str_split(.x, '_', 2)[[1]][1]),
+         number = str_sub(ID, start = -1, end = -1),
+         time_raw = map(files, ~ str_split(.x, '_', 2)[[1]][2]),
+         hour_raw = str_sub(time_raw, start = 1, end = -7) %>% as.numeric(),
+         hour = case_when(hour_raw < 10 ~ hour_raw + 12,
+                          hour_raw >= 10 ~ hour_raw),
+         minute = str_sub(time_raw, start = -6, end = -5),
+         time = lubridate::ymd_hm(paste("2023-04-26", hour, minute, sep = ":"))) %>% 
+  select(enzyme, number, time, data) %>% 
+  left_join(key, by = c("enzyme", "number" = "plate_number")) %>% 
+  filter(enzyme != "standard_") %>% 
+  mutate(data2 = map2(data, key, ~ setNames(.x[2:13], .y[,1:12]))) %>% 
+  select(enzyme, number, time, data2) %>% 
+  mutate(data3 = map(data2, ~ .x %>%
+                       select(-contains("n")) %>% 
+                       rownames_to_column() %>% 
+                       pivot_longer(cols = -rowname)),
+         data4 = map(data3, ~ .x %>%
+                       group_by(name) %>% 
+                       summarise(median = median(value))))
+
+standards = read_csv(here("data/2023/exoenzymes/exoenzymes_csv/standard_0157.csv"), col_types = cols())
+
+standards_key = read_csv(here("data/2023/exoenzymes/standard_key.csv"))
+
+substrate_standards = standards[,12:13] %>%
+  rename(bgluc = `11`, NAG = `12`) %>% 
+  rownames_to_column() %>% 
+  pivot_longer(-rowname) %>% 
+  group_by(name) %>% 
+  summarize(substrate_control = mean(value)) %>% 
+  rename(enzyme = name)
+
+masses = read_csv(here("data/2023/exoenzymes/soil_weights.csv"), col_types = cols()) %>% 
+  select(-assay)
+
+# treatments = read_csv(here("data/treatments.csv"), col_types = cols()) %>% 
+#   mutate(number = as.factor(number),
+#          treatment = as.factor(treatment))
+```
+
+```{r}
+data2 = files %>% 
+  select(enzyme, number, time, data3) %>% 
+  group_by(enzyme, number) %>% 
+  arrange(time, .by_group = T) %>% 
+  mutate(measurement = row_number()) %>%  
+  unnest(data3) %>% 
+  complete(measurement = c(1,2,3,4)) %>% 
+  nest(data = c(rowname, name, value)) %>% 
+  pivot_wider(names_from = measurement, values_from = c(data, time)) %>% 
+  mutate(new_data = pmap(list(data_1, data_2, data_3, data_4), ~ ..1 %>% 
+                           left_join(..2, by = c("rowname", "name")) %>% 
+                           left_join(..3, by = c("rowname", "name")) %>% 
+                           left_join(..4, by = c("rowname", "name")) %>% 
+                           separate(name, c("sample_ID", "type"), sep = "-") %>% 
+                           rename(time_1 = value.x, time_2 = value.y, time_3 = value.x.x, time_4 = value.y.y) %>% 
+                           pivot_longer(cols = c(-rowname, -sample_ID, -type)) %>% 
+                           filter(!is.na(type)) %>% 
+                           pivot_wider(id_cols = c(rowname, sample_ID, name), names_from = type, values_from = value) %>% 
+                           select(rowname, sample_ID, name, sub, mub, buf) %>% 
+                           mutate(sub = as.double(sub),
+                                  mub = as.double(mub),
+                                  buf = as.double(buf)))) %>% 
+  select(enzyme, starts_with("time"), new_data) %>% 
+  unnest(new_data) %>% 
+  left_join(substrate_standards, by = "enzyme") %>%
+  ungroup() %>% 
+  group_by(sample_ID)  %>% 
+  mutate(quench_coefficient = (mub - buf)/41805,
+         assay = (sub - buf)/quench_coefficient - substrate_control) %>% 
+  ungroup() %>% 
+  filter(!is.na(sub)) %>% 
+  group_by(enzyme, sample_ID, rowname) %>% 
+  mutate(net_change = assay - assay[1],
+         emission_coefficient = 43943)
+
+
+
+```
+
+```{r}
+times = data2 %>% 
+  ungroup() %>% 
+  select(rowname, number, enzyme, starts_with("time")) %>% 
+  pivot_longer(c(-enzyme, -number, - rowname), values_to = "time")
+```
+
+```{r}
+data_sequence = data2 %>% 
+  select(-starts_with("time")) %>% 
+  ungroup() %>% 
+  left_join(times, by = c("number" = "number", "enzyme" = "enzyme", "name" = "name", "rowname")) %>% 
+  distinct() %>% 
+  group_by(enzyme, sample_ID, rowname) %>% 
+  mutate(time_elapsed = time - time[1]) %>% 
+  left_join(masses, by = "sample_ID") %>% 
+  mutate(mass_sample = mass/400,
+         time_decimal = as.numeric(time_elapsed)/3600,
+         activity = (assay * .1)/(emission_coefficient * 0.1 * mass_sample * time_decimal))
+
+
+
+activity_data = data_sequence %>% 
+  select(enzyme, name, sample_ID, activity) %>% 
+  filter(name == "time_2",
+         sample_ID != "n") %>%
+  separate(sample_ID, into = c("plot", "depth"), sep = "_") %>% 
+  separate(plot, into = c("plot", "treatment"), sep = 1) %>% 
+  mutate(treatment = tolower(treatment))
+
+enzyme_activity = activity_data %>% 
+  group_by(enzyme, plot, treatment, depth) %>% 
+  summarise(mean_activity = mean(activity),
+            sd_activity = sd(activity))
+
+
+```
+```{r}
+ggplot(activity_data, aes(x = plot, y = activity, fill = depth)) +
+ geom_boxplot(position = position_dodge(width = 0.75)) +
+ facet_wrap(.~enzyme)
+
+```
+
+```{r}
+root_mass = read_csv(here("data/2023/roots/root_dry_matter.csv")) %>% 
+  mutate(depth = as.character(depth),
+         plot = as.character(plot))
+
+root_cn = read_csv(here("data/2023/roots/root_CN_20230621.csv")) %>% 
+  select(sample, mass, nitrogen, carbon) %>% 
+  separate(sample, into = c("plot", "depth"), sep = "_") %>% 
+  filter(!is.na(depth))
+
+
+
+enz_roots = enzyme_activity %>% 
+  left_join(root_mass, by = c("plot", "treatment", "depth"))
+
+```
+
+```{r}
+ggplot(enz_roots, aes(x = root_dry_mass, y = mean_activity, color = depth)) +
+  geom_point() +
+  geom_errorbar(aes(ymin = mean_activity - sd_activity, ymax = mean_activity + sd_activity)) +
+  facet_wrap(.~enzyme) 
+```
+
