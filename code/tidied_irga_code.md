@@ -233,25 +233,17 @@ sum_data = data %>%
             co2 = max(change_adjusted)) %>%
   mutate(time_elapsed = as.numeric((time_end - time_start)/3600),
          av_rate = co2/time_elapsed) %>%
-  mutate(treatment = as.factor(case_when(sample_ID == 5 | sample_ID == 7 ~ 1,
-                               sample_ID != 5 | sample_ID != 7 ~ 0))) %>%
-  left_join(dry_mass, by = "sample_ID") %>% 
   filter(!is.na(sample_ID))
 ```
 
 ```
 ## `summarise()` has grouped output by 'sample_ID', 'plot', 'treatment'. You can override using the `.groups` argument.
 ```
+# 
+# ```{r}
+# ggplot(sum_data, aes(x = as.factor(depth), y = av_rate, color = treatment)) +
+#   geom_boxplot()
 
-
-```r
-ggplot(sum_data, aes(x = as.factor(depth), y = av_rate, color = treatment)) +
-  geom_boxplot()
-```
-
-![plot of chunk unnamed-chunk-16](figure/unnamed-chunk-16-1.png)
-
-```r
 # +
 #   geom_smooth(aes(x = root, y = av_rate, color = NULL), method = "lm", color = "black", linetype = "dashed", se = F) +
 #   theme_bw() +
@@ -259,237 +251,166 @@ ggplot(sum_data, aes(x = as.factor(depth), y = av_rate, color = treatment)) +
 #   ylab("Microbial Biomass SIR (mol C per hour)") +
 #   scale_color_manual(name = "Treatment", values = c("darkgreen", "purple"), labels = c("Ungrazed", "Grazed")) +
 #   theme(axis.text=element_text(size=12))
-```
+<!-- ``` -->
 
-
-```r
-ggplot(sum_data, aes(x = treatment, y = av_rate)) +
-  geom_boxplot() +
-  geom_point()
-```
-
-![plot of chunk unnamed-chunk-17](figure/unnamed-chunk-17-1.png)
-
-```r
-ggplot(sum_data, aes(x = treatment, y = root)) +
-  geom_point()
-```
-
-```
-## Warning: Removed 34 rows containing missing values (`geom_point()`).
-```
-
-![plot of chunk unnamed-chunk-17](figure/unnamed-chunk-17-2.png)
-
-```r
-t = lm(data = sum_data, av_rate ~ root)
-```
-
-```
-## Error in lm.fit(x, y, offset = offset, singular.ok = singular.ok, ...): 0 (non-NA) cases
-```
-
-```r
-summary(t)
-```
-
-```
-## Error in object[[i]]: object of type 'closure' is not subsettable
-```
-
-
-
-```r
-ggplot(data, aes(x = time, y = change_adjusted, color = sample_ID)) +
-  geom_point() +
-  geom_line()
-```
-
-![plot of chunk unnamed-chunk-18](figure/unnamed-chunk-18-1.png)
-
-```r
-ggplot(data, aes(x = time, y = change_adjusted, color = sample_ID)) +
-  geom_col()
-```
-
-![plot of chunk unnamed-chunk-18](figure/unnamed-chunk-18-2.png)
+<!-- ```{r} -->
+<!-- ggplot(sum_data, aes(x = treatment, y = av_rate)) + -->
+<!--   geom_boxplot() + -->
+<!--   geom_point() -->
 
 
 
 
-```r
-samples = by_sample %>%
-  select(sample_ID,  data, starts_data, ends_data) %>%
-  #check on number of starts and ends
-  mutate(nstarts = map(starts_data, nrow),
-         nends = map(ends_data, nrow),
-         #put starts and ends back together and arrange in order of time, assign interval number
-         all = map2(starts_data, ends_data, ~ bind_rows(.x, .y) %>%
-                      ungroup() %>%
-                      mutate(date = lubridate::mdy(date)) %>%
-                      arrange(datetime, start_end) %>%
-                      mutate(interval = cumsum(start))),
-         #only choose intervals with a start an an end, find change in co2 in each interval, calculate cumulative co2 emitted since start of incubation
-         intervals = map(all, ~ .x %>%
-                           mutate(total_time = hms::as.hms(.x$datetime - .x$datetime[1])) %>%
-                           group_by(interval) %>%
-                           filter(n() > 1) %>%
-                           mutate(co2change = c(0, diff(mol)),
-                                  timechange = (datetime - datetime[1])/86400) %>%
-                           ungroup() %>%
-                           mutate(total_co2 = cumsum(co2change)) %>%
-                           filter(ifelse(interval == 1, start <2, start_end == "end"))
-                         ))
-```
 
-```
-## Error in select(., sample_ID, data, starts_data, ends_data): object 'by_sample' not found
-```
+<!-- ggplot(sum_data, aes(x = treatment, y = root)) + -->
+<!--   geom_point() -->
+
+<!-- t = lm(data = sum_data, av_rate ~ root) -->
+<!-- summary(t) -->
+
+<!-- ``` -->
 
 
-```r
-#read in soil weights, day of removal data
+<!-- ```{r} -->
+<!-- ggplot(data, aes(x = time, y = change_adjusted, color = sample_ID)) + -->
+<!--   geom_point() + -->
+<!--   geom_line() -->
 
-tubes_removal = read_csv(here("data/incubation/dpw_extraction_weights.csv"),
-              col_types = cols(plot = col_factor(),
-                               treatment = col_factor(),
-                               depth = col_factor(),
-                               sample_date = col_date(format = "%m/%d/%Y"),
-                               lab_date = col_date(format = "%m/%d/%Y")))
-```
+<!-- ggplot(data, aes(x = time, y = change_adjusted, color = sample_ID)) + -->
+<!--   geom_col() -->
+<!-- ``` -->
 
-```
-## Error: 'G:/My Drive/UCSB/Research/grazing_sedgewick/data/incubation/dpw_extraction_weights.csv' does not exist.
-```
 
-```r
-soil_weights = read_csv(here("data/incubation/add_water.csv"),
-              col_types = cols(plot = col_factor(),
-                               treatment = col_factor(),
-                               depth = col_factor(),
-                               sample_date = col_date(format = "%m/%d/%Y"),
-                               lab_date = col_date(format = "%m/%d/%Y")))
-```
 
-```
-## Error: 'G:/My Drive/UCSB/Research/grazing_sedgewick/data/incubation/add_water.csv' does not exist.
-```
+<!-- ```{r} -->
 
-```r
-fm = read_csv(here("data/moisture_whc/csv/moisture.csv"),
-              col_types = cols(date = col_date(format = "%m/%d/%Y")))
-```
 
-```
-## Error: 'G:/My Drive/UCSB/Research/grazing_sedgewick/data/moisture_whc/csv/moisture.csv' does not exist.
-```
+<!-- samples = by_sample %>% -->
+<!--   select(sample_ID,  data, starts_data, ends_data) %>% -->
+<!--   #check on number of starts and ends -->
+<!--   mutate(nstarts = map(starts_data, nrow), -->
+<!--          nends = map(ends_data, nrow), -->
+<!--          #put starts and ends back together and arrange in order of time, assign interval number -->
+<!--          all = map2(starts_data, ends_data, ~ bind_rows(.x, .y) %>% -->
+<!--                       ungroup() %>% -->
+<!--                       mutate(date = lubridate::mdy(date)) %>% -->
+<!--                       arrange(datetime, start_end) %>% -->
+<!--                       mutate(interval = cumsum(start))), -->
+<!--          #only choose intervals with a start an an end, find change in co2 in each interval, calculate cumulative co2 emitted since start of incubation -->
+<!--          intervals = map(all, ~ .x %>% -->
+<!--                            mutate(total_time = hms::as.hms(.x$datetime - .x$datetime[1])) %>% -->
+<!--                            group_by(interval) %>% -->
+<!--                            filter(n() > 1) %>% -->
+<!--                            mutate(co2change = c(0, diff(mol)), -->
+<!--                                   timechange = (datetime - datetime[1])/86400) %>% -->
+<!--                            ungroup() %>% -->
+<!--                            mutate(total_co2 = cumsum(co2change)) %>% -->
+<!--                            filter(ifelse(interval == 1, start <2, start_end == "end")) -->
+<!--                          )) -->
 
 
 
 
-```r
-fm = fm %>%
-  mutate(wet_soil = tray_wet_soil - tray_weight,
-         dry_soil = tray_dry_soil - tray_weight,
-         moisture = wet_soil - dry_soil,
-         field_moisture = moisture/dry_soil)
-```
 
-```
-## Error in mutate(., wet_soil = tray_wet_soil - tray_weight, dry_soil = tray_dry_soil - : object 'fm' not found
-```
+<!-- ``` -->
 
-```r
-inc_water = soil_weights %>%
-  left_join(fm, by = c("sample")) %>%
-  select(sample, soil_weight, tube_ID, moisture) %>%
-  mutate(water_start = moisture * soil_weight,
-         soil_start = soil_weight - water_start)
-```
+<!-- ```{r} -->
 
-```
-## Error in left_join(., fm, by = c("sample")): object 'soil_weights' not found
-```
+<!-- #read in soil weights, day of removal data -->
+
+<!-- tubes_removal = read_csv(here("data/incubation/dpw_extraction_weights.csv"), -->
+<!--               col_types = cols(plot = col_factor(), -->
+<!--                                treatment = col_factor(), -->
+<!--                                depth = col_factor(), -->
+<!--                                sample_date = col_date(format = "%m/%d/%Y"), -->
+<!--                                lab_date = col_date(format = "%m/%d/%Y"))) -->
 
 
-
-```r
-tubes = tubes_removal %>%
-  right_join(inc_water, by = c("plot" = "sample", "tube_ID")) %>%
-  rename(sample = plot) %>%
-  select(sample_date, sample, tube_ID, soil_weight, soil_start)%>%
-  filter(tube_ID != "X")%>%
-  group_by(sample) %>%
-  arrange(sample_date) %>%
-  nest() %>%
-  rename(tubes = data) %>%
-  mutate(tubes = map(tubes, ~ .x %>%
-                       mutate(total_mass = c(sum(soil_weight) - cumsum(soil_weight) + soil_weight))))
-```
-
-```
-## Error in right_join(., inc_water, by = c(plot = "sample", "tube_ID")): object 'tubes_removal' not found
-```
+<!-- soil_weights = read_csv(here("data/incubation/add_water.csv"), -->
+<!--               col_types = cols(plot = col_factor(), -->
+<!--                                treatment = col_factor(), -->
+<!--                                depth = col_factor(), -->
+<!--                                sample_date = col_date(format = "%m/%d/%Y"), -->
+<!--                                lab_date = col_date(format = "%m/%d/%Y"))) -->
 
 
-```r
-air_and_soil = samples %>%
-  select(sample_ID, intervals) %>%
-  left_join(tubes, by = c("sample_ID" = "sample")) %>%
-  mutate(as = map2(intervals, tubes, ~ left_join(.x, .y, by= c("date" = "sample_date")) %>%
-                     fill(total_mass) %>%
-                     fill(total_mass, .direction =  "up") %>%
-                     mutate(time_elapsed = as.numeric(total_time)/86400,
-                            total_time = as.numeric(total_time)/86400,
-                            # time_bin = cut(total_time, breaks = c(-0.01, 0.1, 1.1, 2.2, 5.5, 7.5, 10.5, 17.5, 28.5), labels = c(0, 1, 2, 5, 7, 10, 17, 28)),
-                            co2persoil = mol/total_mass,
-                            co2cum = cumsum(co2persoil),
-                            co2rate = co2persoil/as.numeric(timechange),
-                            logco2rate = log(co2rate))
-  )
-  ) %>%
-  select(sample_ID, as)
-```
-
-```
-## Error in select(., sample_ID, intervals): object 'samples' not found
-```
+<!-- fm = read_csv(here("data/moisture_whc/csv/moisture.csv"), -->
+<!--               col_types = cols(date = col_date(format = "%m/%d/%Y"))) -->
+<!-- ``` -->
 
 
-```r
-forplot = air_and_soil %>% unnest(as)
-```
 
-```
-## Error in unnest(., as): object 'air_and_soil' not found
-```
+<!-- ```{r} -->
+
+<!-- fm = fm %>% -->
+<!--   mutate(wet_soil = tray_wet_soil - tray_weight, -->
+<!--          dry_soil = tray_dry_soil - tray_weight, -->
+<!--          moisture = wet_soil - dry_soil, -->
+<!--          field_moisture = moisture/dry_soil) -->
+
+<!-- inc_water = soil_weights %>% -->
+<!--   left_join(fm, by = c("sample")) %>% -->
+<!--   select(sample, soil_weight, tube_ID, moisture) %>% -->
+<!--   mutate(water_start = moisture * soil_weight, -->
+<!--          soil_start = soil_weight - water_start) -->
+
+<!-- ``` -->
 
 
-```r
-(co2cum = ggplot(forplot, aes(x = as.numeric(time_elapsed), y = co2cum, color = sample_ID)) +
-  geom_line(size = 1) +
-  geom_point() +
-  scale_x_continuous(breaks = c(0,1,2,6,12, 19, 27, 41)) +
-  ylim(0, 0.002) +
-  xlab("Time (Days)") +
-  ylab(expression("cumulative mol CO"[2]*" g"^"-1"*" dry soil")) )
-```
+<!-- ```{r} -->
+<!-- tubes = tubes_removal %>% -->
+<!--   right_join(inc_water, by = c("plot" = "sample", "tube_ID")) %>% -->
+<!--   rename(sample = plot) %>% -->
+<!--   select(sample_date, sample, tube_ID, soil_weight, soil_start)%>% -->
+<!--   filter(tube_ID != "X")%>% -->
+<!--   group_by(sample) %>% -->
+<!--   arrange(sample_date) %>% -->
+<!--   nest() %>% -->
+<!--   rename(tubes = data) %>% -->
+<!--   mutate(tubes = map(tubes, ~ .x %>% -->
+<!--                        mutate(total_mass = c(sum(soil_weight) - cumsum(soil_weight) + soil_weight)))) -->
+<!-- ``` -->
 
-```
-## Error in ggplot(forplot, aes(x = as.numeric(time_elapsed), y = co2cum, : object 'forplot' not found
-```
+<!-- ```{r} -->
+<!-- air_and_soil = samples %>% -->
+<!--   select(sample_ID, intervals) %>% -->
+<!--   left_join(tubes, by = c("sample_ID" = "sample")) %>% -->
+<!--   mutate(as = map2(intervals, tubes, ~ left_join(.x, .y, by= c("date" = "sample_date")) %>% -->
+<!--                      fill(total_mass) %>% -->
+<!--                      fill(total_mass, .direction =  "up") %>% -->
+<!--                      mutate(time_elapsed = as.numeric(total_time)/86400, -->
+<!--                             total_time = as.numeric(total_time)/86400, -->
+<!--                             # time_bin = cut(total_time, breaks = c(-0.01, 0.1, 1.1, 2.2, 5.5, 7.5, 10.5, 17.5, 28.5), labels = c(0, 1, 2, 5, 7, 10, 17, 28)), -->
+<!--                             co2persoil = mol/total_mass, -->
+<!--                             co2cum = cumsum(co2persoil), -->
+<!--                             co2rate = co2persoil/as.numeric(timechange), -->
+<!--                             logco2rate = log(co2rate)) -->
+<!--   ) -->
+<!--   ) %>% -->
+<!--   select(sample_ID, as) -->
+<!-- ``` -->
 
-```r
-(co2rate = ggplot(forplot %>% filter(!is.infinite(co2rate)), aes(x = as.numeric(time_elapsed), y = co2rate, color = sample_ID)) +
-  geom_line(size = 1) +
-  geom_point() +
-   scale_x_continuous(breaks = c(0,1,2,6,12, 19, 27, 41)) +
-  theme(axis.text.x = element_text(vjust = 0.5)) +
-  # ggtitle("Cumulative CO2 per gram soil") +
-  xlab("Time (Days)") +
-  ylab(expression("mol CO"[2]*"day"^"-1"*" g"^"-1"*" dry soil")))
-```
+<!-- ```{r} -->
+<!-- forplot = air_and_soil %>% unnest(as) -->
 
-```
-## Error in filter(., !is.infinite(co2rate)): object 'forplot' not found
-```
+<!-- ``` -->
+
+<!-- ```{r} -->
+<!-- (co2cum = ggplot(forplot, aes(x = as.numeric(time_elapsed), y = co2cum, color = sample_ID)) + -->
+<!--   geom_line(size = 1) + -->
+<!--   geom_point() + -->
+<!--   scale_x_continuous(breaks = c(0,1,2,6,12, 19, 27, 41)) + -->
+<!--   ylim(0, 0.002) + -->
+<!--   xlab("Time (Days)") + -->
+<!--   ylab(expression("cumulative mol CO"[2]*" g"^"-1"*" dry soil")) ) -->
+
+<!-- (co2rate = ggplot(forplot %>% filter(!is.infinite(co2rate)), aes(x = as.numeric(time_elapsed), y = co2rate, color = sample_ID)) + -->
+<!--   geom_line(size = 1) + -->
+<!--   geom_point() + -->
+<!--    scale_x_continuous(breaks = c(0,1,2,6,12, 19, 27, 41)) + -->
+<!--   theme(axis.text.x = element_text(vjust = 0.5)) + -->
+<!--   # ggtitle("Cumulative CO2 per gram soil") + -->
+<!--   xlab("Time (Days)") + -->
+<!--   ylab(expression("mol CO"[2]*"day"^"-1"*" g"^"-1"*" dry soil"))) -->
+
+<!-- ``` -->
