@@ -62,12 +62,13 @@ leaf_CN_formatted = leaf_CN %>%
 
 ```{r}
 leaf_CN_formatted <- leaf_CN_formatted %>%
-  mutate(CNratio=leaf_carbon/leaf_nitrogen, 2)
+  mutate(CNratio=leaf_carbon/leaf_nitrogen, plot= as.numeric(plot))%>%
+  left_join(leaf_scan_and_dry_mass, by= c("plot", "species"))
   
 ```
 
 ```{r}
-ggplot(leaf_CN_formatted, aes(x=species, y=CNratio)) +  geom_point()
+ggplot(leaf_CN_formatted, aes(x=leaf_nitrogen, y=sla, color = species)) +  geom_point()
 
 ```
 
