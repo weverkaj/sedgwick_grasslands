@@ -28,7 +28,7 @@ survey= survey_1A_2023_04_12 %>%
 survey_counts <- survey %>%
   pivot_longer(cols = c(cover1count, cover2count, cover3count, cover4count, cover5count,      cover6count), values_to ="count")%>%
   mutate(name = str_replace(name, "count", ""))%>%
-  filter(name == cover)%>%
+  filter(name == cover)%>% #is the first thing equal to the thing
    drop_na()%>%
   select(-name)
 ```
@@ -36,9 +36,9 @@ survey_counts <- survey %>%
 
 ```{r}
 species_summary = survey_counts%>%  #create new dataframe from survey_counts to make species summary with only four columns
-  group_by(treatment, block, quad, species)%>% #
-  summarize(total_count = sum(count))%>%
-  mutate(relative_cover = total_count/sum(total_count))%>%
+  group_by(treatment, block, quad, species)%>% #creates new table given certain columns
+  summarize(total_count = sum(count))%>% #added the counts per species to create the count total
+  mutate(relative_cover = total_count/sum(total_count))%>% #relative count is the total count in eahc row divided by the sum of all the counts 
   mutate(absolute_cover = total_count/25)%>%
   rename(plot = block)
   
@@ -46,15 +46,26 @@ species_summary = survey_counts%>%  #create new dataframe from survey_counts to 
 
 ```{r}
 leaf_CN_and_species_summary_data = species_summary %>%
-   left_join(leaf_CN_formatted, by= c("plot", "species"))
+   left_join(leaf_CN_formatted, by= c("species","plot"))
 
 ```
 
 ```{r}
-average_nitrogen = leaf_CN_and_species_summary_data%>%
-  group_by(plot, quad, leaf_nitrogen)%>% 
-  summarize(leaf_nitrogen= sum(leaf_nitrogen))%>%
-mutate(relative_nitrogen = leaf_nitrogen/sum(leaf_nitrogen))%>%
-  mutate(absolute_nitrogen = leaf_nitrogen/25)
+species_avg_N= leaf_CN_and_species_summary_data %>%
+  group_by(species)%>%
+  summarize(species_avg_N = mean(leaf_nitrogen))
+```
+
+```{r}
+species_avg_N_join = species_avg_N %>%
+  left_join(leaf_CN_and_species_summary_data, by= c("species"))%>%
+  group_by(plot, treatment, quad)
+```
+
+```{r}
+species_weighted_N= species_avg_N_join %>%
+  mutate(leaf_N_weighted_avg = species_avg_N*relative_cover)%>%
+  summarize(average_N = sum(leaf_N_weighted_avg)/14)%>%
+  group_by(plot, treatment, quad)
 ```
 
