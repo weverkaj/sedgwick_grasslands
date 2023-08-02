@@ -88,6 +88,7 @@ leaf_CN_formatted <- leaf_CN_formatted %>%
   
 ```
 
+##### This is where you need to calculate average N per species before the next chunk of code. Then you can do a left_join by species
 
 ```{r}
 leaf_CN_and_species_summary_data = species_summary %>%
@@ -95,11 +96,14 @@ leaf_CN_and_species_summary_data = species_summary %>%
 
 ```
 
+#### You're calculating species averages in the chunk below - after you joined the leaf CN data. Use the code you wrote here but on the leaf_CN_formatted dataframe above
+
 ```{r}
 species_avg_N= leaf_CN_and_species_summary_data %>%
   group_by(species)%>%
   summarize(species_avg_N = mean(leaf_nitrogen))
 ```
+
 
 ```{r}
 species_avg_N_join = species_avg_N %>%
