@@ -20,7 +20,7 @@ survey_1A_2023_04_12 = read_csv(here("data/2023/plant_community/surveys/survey_1
 ```{r message = FALSE}
 f = list.files(path = here("data/2023/plant_community/surveys/"))%>%
   as_tibble()%>%
-  mutate(data = map(value, ~read_csv(paste0(here("data/2023/plant_community/surveys/"), .x), col_types = cols(quad = col_character()))))%>%
+  mutate(data = map(value, ~read_csv(here("data/2023/plant_community/surveys/", .x), col_types = cols(quad = col_character())))) %>%
   unnest(data)
 ```
 
@@ -181,18 +181,26 @@ root_mass = read_csv(here("data/2023/roots/root_dry_matter.csv")) %>%
   mutate(root_mass_cor = root_dry_mass/soil_dry_mass,
          root_c_cor = root_mass_cor * (carbon/100))
 ```
+## You were using the wrong dataframe here: just use the species_weighted_N_sla, which is where the quadrat averages are. I think try again using the right data
+
+
+Also to notice: each quadrat has two associated soil samples, because there are two depths. It's probably better to visualize the two depths separately.You can do this in your plot if you add `facet_wrap(.~depth)` to your ggplots. Google it if you want to learn more about how to use it.
+
 ```{r}
-soil_sample_data <- average_N_and_species_summary_data %>%
-  filter(quad == "ss")%>%
+soil_sample_data <- species_weighted_N_sla %>%
+  filter(quad == "ss") %>%
   mutate(treatment = tolower(treatment),
-    plot= as.character(plot))%>%
+    plot= as.character(plot)) %>%
     left_join(root_mass, by = c("plot", "treatment"))
 ```
 
+
+
+
 ```{r}
-ggplot(soil_sample_data, aes(x=root_mass_cor, y=avg_sla, color = species)) +  geom_point()
+ggplot(soil_sample_data, aes(x=root_mass_cor, y=average_sla)) + geom_point()
 ```
 ```{r}
-ggplot(soil_sample_data, aes(x=root_mass_cor, y=species_avg_N, color = species)) +  geom_point()
+ggplot(soil_sample_data, aes(x=root_mass_cor, y=average_N)) +  geom_point()
 ```
 
