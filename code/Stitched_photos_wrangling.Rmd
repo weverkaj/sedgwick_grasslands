@@ -1,0 +1,38 @@
+---
+title: "Stitched_Photos"
+output: html_document
+date: "2023-08-29"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(here)
+library(janitor)
+library(ggplot2)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+stitched_photos_batched= read_csv(here("data/stitched_photos_batched.csv"))
+
+```
+
+## Including Plots
+
+You can also embed plots, for example:
+
+```{r}
+
+stitched_data= stitched_photos_batched %>%
+  group_by(image, length, surface, volume)%>%
+  summarize(sum_root_length=(sum(length)), sum_root_surface= (sum(surface)), sum_root_volume=(sum(volume)))
+  
+```
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.

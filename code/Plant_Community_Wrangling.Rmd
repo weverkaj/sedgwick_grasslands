@@ -198,9 +198,10 @@ soil_sample_data <- species_weighted_N_sla %>%
 
 
 ```{r}
-ggplot(soil_sample_data, aes(x=root_mass_cor, y=average_sla)) + geom_point()
+ggplot(soil_sample_data, aes(x=root_mass_cor, y=average_sla)) + geom_point() + facet_wrap(.~depth)
 ```
+
 ```{r}
-ggplot(soil_sample_data, aes(x=root_mass_cor, y=average_N)) +  geom_point()
+ggplot(soil_sample_data, aes(x=root_mass_cor, y=average_N)) +  geom_point() + facet_wrap(.~depth)
 ```
 
