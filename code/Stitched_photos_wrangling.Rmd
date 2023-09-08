@@ -30,9 +30,81 @@ You can also embed plots, for example:
 ```{r}
 
 stitched_data= stitched_photos_batched %>%
-  group_by(image, length, surface, volume)%>%
-  summarize(sum_root_length=(sum(length)), sum_root_surface= (sum(surface)), sum_root_volume=(sum(volume)))
+  group_by(image)%>%
+  summarize(sum_root_length=(sum(length)), sum_root_surface= (sum(surface)), sum_root_volume=(sum(volume)))%>%
+  separate(image, into = c("plot", "treatment","quad"), sep = "_")%>%
+   mutate(treatment = tolower(treatment))
   
 ```
 
+```{r}
+soil_moisture = read_csv(here("data/2023/soil/soil_moisture.csv")) %>% 
+  mutate(soil_wet = tray_wet - tray,
+         soil_dry = tray_dry - tray,
+         water = soil_wet - soil_dry,
+         moisture = water/soil_wet)
+
+soil_mass = read_csv(here("data/2023/soil/soil_collected.csv")) %>% 
+  mutate(soil_mass = collected_mass - rock_mass) %>% 
+  left_join(soil_moisture, by = c("collection_date", "plot", "treatment", "depth")) %>% 
+  mutate(soil_dry_mass = soil_mass*(1-moisture)) %>% 
+  select(plot, treatment, depth, moisture, soil_dry_mass) %>% 
+  mutate(depth = as.character(depth),
+         plot = as.character(plot))
+
+root_cn = read_csv(here("data/2023/roots/root_CN_20230621.csv")) %>% 
+  select(sample, mass, nitrogen, carbon) %>% 
+  separate(sample, into = c("plot", "depth"), sep = "_") %>% 
+  filter(!is.na(depth)) %>% 
+  separate(plot, into = c("plot", "treatment"), sep = 1) %>% 
+  mutate(treatment = tolower(treatment),
+         depth = case_when(depth == "0-20" ~ "20",
+                           depth == "20-30" ~ "30"))
+
+root_mass = read_csv(here("data/2023/roots/root_dry_matter.csv")) %>% 
+  mutate(depth = as.character(depth),
+         plot = as.character(plot)) %>% 
+  left_join(soil_mass, by = c("plot", "treatment", "depth")) %>% 
+  left_join(root_cn, by = c("plot", "treatment", "depth")) %>% 
+  mutate(root_mass_cor = root_dry_mass/soil_dry_mass,
+         root_c_cor = root_mass_cor * (carbon/100))
+```
+
+```{r}
+root_mass_total = root_mass %>%
+  group_by(plot, treatment)%>%
+  summarise(sum_root_dry_mass=sum(root_dry_mass), sum_soil_dry_mass = sum(soil_dry_mass))%>%
+  mutate(roots_per_soil = (sum_root_dry_mass)/sum_soil_dry_mass)%>%
+  left_join(stitched_data, by = c("plot", "treatment"))
+  
+  
+```
+
+```{r}
+ggplot(root_mass_total, aes(x=sum_root_length, y=roots_per_soil)) + geom_point() + 
+  geom_smooth(method = "lm")
+```
+```{r}
+mod = lm(roots_per_soil~sum_root_length , data = root_mass_total)
+summary(mod)
+#join trait data 
+```
+
+```{r}
+ggplot(root_mass_total, aes(x=sum_root_surface, y=roots_per_soil)) + geom_point() 
+```
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
+
+```{r}
+mod = lm(roots_per_soil~sum_root_surface , data = root_mass_total)
+summary(mod)
+```
+
+```{r}
+ggplot(root_mass_total, aes(x=sum_root_volume, y=roots_per_soil)) + geom_point() 
+```
+```{r}
+mod = lm(roots_per_soil~sum_root_volume , data = root_mass_total)
+summary(mod)
+```
+
