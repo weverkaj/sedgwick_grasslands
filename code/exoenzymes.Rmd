@@ -206,13 +206,31 @@ enz_roots_mb = enzyme_activity %>%
 ggplot(enz_roots_mb, aes(x = root_mass_cor, y = mean_activity/av_rate, color = depth)) +
   geom_point() +
   # geom_errorbar(aes(ymin = mean_activity - sd_activity, ymax = mean_activity + sd_activity)) +
-  facet_wrap(.~enzyme) 
+  facet_wrap(.~enzyme) +
+  geom_smooth(method = "lm")
 ```
 
 ```{r}
 
-rm = lm(av_rate ~ root_mass_cor*depth, data = enz_roots_mb %>% filter(enzyme == "bgluc"))
-summary(rm)
+rm = lm(av_rate ~ root_mass_cor + depth, data = enz_roots_mb %>% filter(enzyme == "bgluc"))
+rm2 = lm(av_rate ~  depth, data = enz_roots_mb %>% filter(enzyme == "bgluc"))
+rm3 = lm(av_rate ~ root_mass_cor*depth, data = enz_roots_mb %>% filter(enzyme == "bgluc"))
 
+
+summary(rm2)
+
+AIC(rm, rm2, rm3)
+
+```
+
+```{r}
+rm = lm(mean_activity/av_rate ~ root_mass_cor + depth, data = enz_roots_mb %>% filter(enzyme == "bgluc"))
+rm2 = lm(mean_activity/av_rate ~  depth, data = enz_roots_mb %>% filter(enzyme == "bgluc"))
+rm3 = lm(mean_activity/av_rate ~ root_mass_cor*depth, data = enz_roots_mb %>% filter(enzyme == "bgluc"))
+
+
+summary(rm3)
+
+AIC(rm, rm2, rm3)
 ```
 
