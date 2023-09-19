@@ -203,15 +203,15 @@ enz_roots_mb = enzyme_activity %>%
 ```
 
 ```{r}
-ggplot(enz_roots_mb, aes(x = root_mass_cor, y = mean_activity, color = depth)) +
+ggplot(enz_roots_mb, aes(x = root_mass_cor, y = mean_activity/av_rate, color = depth)) +
   geom_point() +
-  geom_errorbar(aes(ymin = mean_activity - sd_activity, ymax = mean_activity + sd_activity)) +
+  # geom_errorbar(aes(ymin = mean_activity - sd_activity, ymax = mean_activity + sd_activity)) +
   facet_wrap(.~enzyme) 
 ```
 
 ```{r}
 
-rm = lm(mean_activity ~ root_mass_cor*depth, data = enz_roots %>% filter(enzyme == "NAG"))
+rm = lm(av_rate ~ root_mass_cor*depth, data = enz_roots_mb %>% filter(enzyme == "bgluc"))
 summary(rm)
 
 ```
