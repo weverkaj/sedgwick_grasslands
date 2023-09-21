@@ -149,6 +149,7 @@ enzyme_activity = activity_data %>%
 
 
 ```
+
 ```{r}
 ggplot(activity_data, aes(x = plot, y = activity, fill = depth)) +
  geom_boxplot(position = position_dodge(width = 0.75)) +

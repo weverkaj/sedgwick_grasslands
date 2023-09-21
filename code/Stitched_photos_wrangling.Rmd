@@ -68,6 +68,7 @@ root_mass = read_csv(here("data/2023/roots/root_dry_matter.csv")) %>%
   left_join(root_cn, by = c("plot", "treatment", "depth")) %>% 
   mutate(root_mass_cor = root_dry_mass/soil_dry_mass,
          root_c_cor = root_mass_cor * (carbon/100))
+
 ```
 
 ```{r}
@@ -77,7 +78,11 @@ root_mass_total = root_mass %>%
   mutate(roots_per_soil = (sum_root_dry_mass)/sum_soil_dry_mass)%>%
   left_join(stitched_data, by = c("plot", "treatment"))
   
-  
+```
+```{r}
+enzyme_trait_data = enz_roots_mb %>%
+  mutate(plot = as.double(plot))%>%
+  left_join(species_weighted_N_sla, by = c("treatment", "plot"))
 ```
 
 ```{r}
@@ -89,9 +94,40 @@ mod = lm(roots_per_soil~sum_root_length , data = root_mass_total)
 summary(mod)
 #join trait data 
 ```
-
+ 
 ```{r}
-ggplot(root_mass_total, aes(x=sum_root_surface, y=roots_per_soil)) + geom_point() 
+rm = lm(av_rate ~ root_mass_cor + average_N, data = enzyme_trait_data %>% 
+         filter (enzyme == "bgluc"))
+summary(rm)
+
+rm2 = lm(av_rate~ average_N, data = enzyme_trait_data %>% 
+          filter (enzyme == "bgluc"))
+summary(rm)
+rm3 = lm(av_rate~ root_mass_cor*average_N, data = enzyme_trait_data %>% 
+          filter (enzyme == "bgluc"))
+summary(rm)
+
+AIC(rm, rm2, rm3)
+```
+```{r}
+rm = lm(av_rate ~ root_mass_cor + average_sla, data = enzyme_trait_data %>% 
+         filter (enzyme == "bgluc"))
+summary(rm)
+
+rm2 = lm(av_rate~ average_sla, data = enzyme_trait_data %>% 
+          filter (enzyme == "bgluc"))
+summary(rm)
+rm3 = lm(av_rate~ root_mass_cor*average_sla, data = enzyme_trait_data %>% 
+          filter (enzyme == "bgluc"))
+summary(rm)
+
+AIC(rm, rm2, rm3)
+```
+ 
+ 
+```{r}
+ggplot(root_mass_total, aes(x=sum_root_surface, y=roots_per_soil)) + geom_point()+ 
+  geom_smooth(method = "lm") 
 ```
 Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
 
@@ -101,10 +137,15 @@ summary(mod)
 ```
 
 ```{r}
-ggplot(root_mass_total, aes(x=sum_root_volume, y=roots_per_soil)) + geom_point() 
+ggplot(root_mass_total, aes(x=sum_root_volume, y=roots_per_soil)) + geom_point()+ 
+  geom_smooth(method = "lm") 
 ```
 ```{r}
 mod = lm(roots_per_soil~sum_root_volume , data = root_mass_total)
 summary(mod)
+```
+
+```{r}
+
 ```
 

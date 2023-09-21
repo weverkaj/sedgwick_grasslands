@@ -145,7 +145,8 @@ average_N_and_species_summary_data = species_summary %>%
 species_weighted_N_sla= average_N_and_species_summary_data %>%
   group_by(plot, treatment, quad)%>%
   summarize(average_N = weighted.mean(species_avg_N, relative_cover, na.rm = TRUE), 
-            average_sla = weighted.mean(avg_sla, relative_cover, na.rm = TRUE))
+            average_sla = weighted.mean(avg_sla, relative_cover, na.rm = TRUE))%>%
+  mutate(treatment = tolower(treatment))
  # weighted.mean = (what you're averaging first, what you're weighing it by, na.rm = drops NA before calculation)
 ```
 

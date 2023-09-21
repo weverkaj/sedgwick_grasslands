@@ -14,6 +14,13 @@ Loading necessary libraries
 library(tidyverse)
 library(magrittr)
 library(R.utils)
+```
+
+```
+## Error in library(R.utils): there is no package called 'R.utils'
+```
+
+```r
 library(broom)
 library(here)
 library(janitor)
@@ -108,7 +115,8 @@ run_data = raw_data %>%
 ## Warning: Supplying `...` without names was deprecated in tidyr 1.0.0.
 ## ℹ Please specify a name for each selection.
 ## ℹ Did you want `data = c(-filename, -timestamp_date, -`Time(H:M:S)`)`?
-## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was generated.
+## Call `lifecycle::last_lifecycle_warnings()` to see where this warning was
+## generated.
 ```
 
 Calculate area under the curve
@@ -226,11 +234,11 @@ ggplot(data, aes(x = time_adj, y = fit, color = sample_ID)) +
 ```
 
 ```
-## Don't know how to automatically pick scale for object of type <difftime>. Defaulting to
-## continuous.
+## Don't know how to automatically pick scale for object of type <difftime>.
+## Defaulting to continuous.
 ```
 
-![plot of chunk unnamed-chunk-14](figure/unnamed-chunk-14-1.png)
+![plot of chunk unnamed-chunk-22](figure/unnamed-chunk-22-1.png)
 
 
 
@@ -246,8 +254,8 @@ sum_data = data %>%
 ```
 
 ```
-## `summarise()` has grouped output by 'sample_ID', 'plot', 'treatment'. You can override using
-## the `.groups` argument.
+## `summarise()` has grouped output by 'sample_ID', 'plot', 'treatment'. You can
+## override using the `.groups` argument.
 ```
 # 
 # ```{r}
