@@ -143,9 +143,6 @@ ggplot(root_mass_total, aes(x=sum_root_volume, y=roots_per_soil)) + geom_point()
 ```{r}
 mod = lm(roots_per_soil~sum_root_volume , data = root_mass_total)
 summary(mod)
-```
-
-```{r}
 
 ```
 

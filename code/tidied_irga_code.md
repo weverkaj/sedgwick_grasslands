@@ -49,14 +49,6 @@ raw_data = tibble(filename = files) %>%
          timestamp_time = map(filename, ~ read_table2(file.path(licor_raw, .x), skip = 1)[1,1])) %>%
   unnest(timestamp_time)
 ```
-
-```
-## Warning: There was 1 warning in `mutate()`.
-## ℹ In argument: `contents = map(...)`.
-## Caused by warning:
-## ! `read_table2()` was deprecated in readr 2.0.0.
-## ℹ Please use `read_table()` instead.
-```
 Read in sequence data from lab
 
 
@@ -238,7 +230,11 @@ ggplot(data, aes(x = time_adj, y = fit, color = sample_ID)) +
 ## Defaulting to continuous.
 ```
 
+<<<<<<< HEAD
 ![plot of chunk unnamed-chunk-22](figure/unnamed-chunk-22-1.png)
+=======
+![plot of chunk unnamed-chunk-52](figure/unnamed-chunk-52-1.png)
+>>>>>>> 02947ac75ce17bc7f2dcef56ff827d4adf5d8a20
 
 
 
